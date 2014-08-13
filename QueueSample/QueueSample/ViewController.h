@@ -8,6 +8,11 @@
 
 #import <UIKit/UIKit.h>
 
-@interface ViewController : UIViewController
+@interface ViewController : UIViewController <UITableViewDataSource, UITableViewDelegate, UIScrollViewDelegate>
+
+@property (weak, nonatomic) IBOutlet UIScrollView *scrollViewQueue;
+@property (strong, nonatomic) NSMutableArray      *arrayTableViewQueue;
+@property (strong, nonatomic) UIPageControl       *pageControlQueue;
+@property (strong, nonatomic) UILabel             *labelMainQueueTitle;
 
 @end
