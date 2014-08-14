@@ -10,20 +10,23 @@
 
 @implementation QueueCell
 
-- (void)setSelected:(BOOL)selected animated:(BOOL)animated
-{
-    [super setSelected:selected animated:animated];
-
-    // Configure the view for the selected state
-}
-
 - (void)setToSelectedState:(BOOL)setSelected
 {
     if (setSelected) {
         [self.elementSelection setImage:[UIImage imageNamed:@"selected.png"]];
+        _isSelected = true;
     } else {
         [self.elementSelection setImage:[UIImage imageNamed:@"unselected.png"]];
+        _isSelected = false;
     }
+}
+
+- (void)loadInformationFromObject:(ElementObject *)object
+{
+    self.elementName.text = [self.elementName.text stringByReplacingOccurrencesOfString:@"COD"
+                                                                             withString:object.elementCode];
+    self.elementName.text = [self.elementName.text stringByReplacingOccurrencesOfString:@"NAME"
+                                                                             withString:object.elementName];
 }
 
 @end

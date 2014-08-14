@@ -81,6 +81,8 @@
                           [[NSMutableArray alloc] init],
                           [[NSMutableArray alloc] init],
                           nil];
+
+    self.arraySelectedElements = [[NSMutableArray alloc] init];
 }
 
 - (void)preloadCells
@@ -95,15 +97,31 @@
 
 - (IBAction)performActionToCurrentSelection:(id)sender
 {
-    UIActionSheet *actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
-                                                             delegate:nil
-                                                    cancelButtonTitle:@"Cancel"
-                                               destructiveButtonTitle:nil
-                                                    otherButtonTitles:
-                                  @"Move to State B",
-                                  @"Move to State C",
-                                  nil];
+    UIActionSheet *actionSheet;
+
+    if (currentQueueNumber == 0) {
+        actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
+                                                  delegate:nil
+                                         cancelButtonTitle:@"Cancel"
+                                    destructiveButtonTitle:nil
+                                         otherButtonTitles:@"Move To State B", @"Move To State C", nil];
+    } else if (currentQueueNumber == 1) {
+        actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
+                                                  delegate:nil
+                                         cancelButtonTitle:@"Cancel"
+                                    destructiveButtonTitle:nil
+                                         otherButtonTitles:@"Move To State A", @"Move To State C", nil];
+    } else if (currentQueueNumber == 2) {
+        actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
+                                                  delegate:nil
+                                         cancelButtonTitle:@"Cancel"
+                                    destructiveButtonTitle:nil
+                                         otherButtonTitles:@"Move To State A", @"Move To State B", nil];
+    }
+
     [actionSheet showInView:[UIApplication sharedApplication].keyWindow];
+    
+    NSLog(@"Current Selected Items : %@",self.arraySelectedElements);
 }
 
 #pragma - Private
@@ -113,6 +131,7 @@
     NSArray   *arrayNamesOfQueues = @[@"STATE A", @"STATE B", @"STATE C"];
     NSInteger numberOfElements    = 0;
 
+    currentQueueNumber            = number;
     self.labelMainQueueTitle.text = [arrayNamesOfQueues objectAtIndex:number];
 
     if (self.arrayElements && self.arrayElements.count > number) {
@@ -133,6 +152,25 @@
         default:
             break;
         }
+    } else {
+        [self cleanSelectionOfElementsOfSpace:number];
+    }
+}
+
+- (void)cleanSelectionOfElementsOfSpace:(NSInteger)position
+{
+    NSInteger   numberOfElements = 0;
+    UITableView *tableView;
+
+    if (self.arrayElements && self.arrayElements.count > position) {
+        numberOfElements = [[self.arrayElements objectAtIndex:position] count];
+        tableView        = [self.arrayTableViewQueue objectAtIndex:position];
+    }
+
+    for (int i = 0; i < numberOfElements; i++) {
+        QueueCell *cell = (QueueCell *)[tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i
+                                                                                           inSection:0]];
+        [cell setToSelectedState:FALSE];
     }
 }
 
@@ -160,15 +198,19 @@
 {
     QueueCell     *cell   = [tableView dequeueReusableCellWithIdentifier:@"QueueCell"];
     ElementObject *object = [[self.arrayElements objectAtIndex:tableView.tag] objectAtIndex:indexPath.row];
-    cell.elementName.text = object.elementName;
+
+    [cell loadInformationFromObject:object];
 
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    QueueCell *cell = (QueueCell *)[tableView cellForRowAtIndexPath:indexPath];
-    [cell setToSelectedState:YES];
+    QueueCell     *cell   = (QueueCell *)[tableView cellForRowAtIndexPath:indexPath];
+    ElementObject *object = [[self.arrayElements objectAtIndex:tableView.tag] objectAtIndex:indexPath.row];
+
+    [cell setToSelectedState:!cell.isSelected];
+    [self.arraySelectedElements addObject:object];
 }
 
 #pragma mark UIScrollViewDelegate
@@ -178,6 +220,7 @@
     CGFloat   pageWidth      = self.scrollViewQueue.frame.size.width;
     CGFloat   fractionalPage = self.scrollViewQueue.contentOffset.x / pageWidth;
     NSInteger page           = lround(fractionalPage);
+
     self.pageControlQueue.currentPage = page;
 }
 
@@ -186,9 +229,12 @@
     CGFloat   pageWidth      = self.scrollViewQueue.frame.size.width;
     CGFloat   fractionalPage = self.scrollViewQueue.contentOffset.x / pageWidth;
     NSInteger page           = lround(fractionalPage);
-    self.pageControlQueue.currentPage = page;
 
-    [self loadQueue:page];
+    if (page != currentQueueNumber) {
+        self.pageControlQueue.currentPage = page;
+        [self.arraySelectedElements removeAllObjects];
+        [self loadQueue:page];
+    }
 }
 
 #pragma mark - Requests

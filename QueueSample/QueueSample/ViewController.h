@@ -8,16 +8,15 @@
 
 #import <UIKit/UIKit.h>
 
-@interface ViewController : UIViewController <UITableViewDataSource, UITableViewDelegate, UIScrollViewDelegate>
+@interface ViewController : UIViewController <UITableViewDataSource, UITableViewDelegate, UIScrollViewDelegate> {
+    NSInteger currentQueueNumber;
+}
 
 @property (weak, nonatomic) IBOutlet UIScrollView *scrollViewQueue;
 @property (strong, nonatomic) NSMutableArray      *arrayTableViewQueue;
+@property (strong, nonatomic) NSMutableArray      *arrayElements;
+@property (strong, nonatomic) NSMutableArray      *arraySelectedElements;
 @property (strong, nonatomic) UIPageControl       *pageControlQueue;
 @property (strong, nonatomic) UILabel             *labelMainQueueTitle;
-
-@property (strong, nonatomic) NSMutableArray *arrayElements;
-@property (strong, nonatomic) NSMutableArray *arrayStateA;
-@property (strong, nonatomic) NSMutableArray *arrayStateB;
-@property (strong, nonatomic) NSMutableArray *arrayStateC;
 
 @end
