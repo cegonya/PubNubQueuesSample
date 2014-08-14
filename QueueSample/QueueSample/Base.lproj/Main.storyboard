@@ -30,6 +30,9 @@
                     <navigationItem key="navigationItem" title="SPACE" id="cfT-bK-0xZ">
                         <barButtonItem key="rightBarButtonItem" systemItem="action" id="Kbn-5K-CZY">
                             <color key="tintColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                            <connections>
+                                <action selector="performActionToCurrentSelection:" destination="vXZ-lx-hvc" id="pOa-cp-lSi"/>
+                            </connections>
                         </barButtonItem>
                     </navigationItem>
                     <connections>

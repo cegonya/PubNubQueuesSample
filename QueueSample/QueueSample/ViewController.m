@@ -7,6 +7,9 @@
 //
 
 #import "ViewController.h"
+#import "AFNetworking.h"
+#import "ElementObject.h"
+#import "QueueCell.h"
 
 @interface ViewController ()
 
@@ -21,6 +24,9 @@
     [self loadHeader];
     [self initializeScrollQueue];
     [self initializeQueues];
+    [self preloadCells];
+
+    [self loadQueue:0];
 }
 
 - (void)loadHeader
@@ -30,7 +36,7 @@
 
     self.labelMainQueueTitle = [[UILabel alloc] initWithFrame:CGRectMake(0, 5, 200, 20)];
     [self.labelMainQueueTitle setTextColor:[UIColor whiteColor]];
-    [self.labelMainQueueTitle setFont:[UIFont boldSystemFontOfSize:15.0]];
+    [self.labelMainQueueTitle setFont:[UIFont boldSystemFontOfSize:17.0]];
     [self.labelMainQueueTitle setTextAlignment:NSTextAlignmentCenter];
     self.labelMainQueueTitle.text = @"STATE A";
 
@@ -70,6 +76,64 @@
         [self.arrayTableViewQueue addObject:tableViewQueue];
         [self.scrollViewQueue addSubview:tableViewQueue];
     }
+
+    self.arrayElements = [[NSMutableArray alloc] initWithObjects:[[NSMutableArray alloc] init],
+                          [[NSMutableArray alloc] init],
+                          [[NSMutableArray alloc] init],
+                          nil];
+}
+
+- (void)preloadCells
+{
+    for (int i = 0; i < self.arrayTableViewQueue.count; i++) {
+        UITableView *tableView = [self.arrayTableViewQueue objectAtIndex:i];
+        [tableView registerNib:[UINib nibWithNibName:@"QueueCell" bundle:nil] forCellReuseIdentifier:@"QueueCell"];
+    }
+}
+
+#pragma Actions
+
+- (IBAction)performActionToCurrentSelection:(id)sender
+{
+    UIActionSheet *actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
+                                                             delegate:nil
+                                                    cancelButtonTitle:@"Cancel"
+                                               destructiveButtonTitle:nil
+                                                    otherButtonTitles:
+                                  @"Move to State B",
+                                  @"Move to State C",
+                                  nil];
+    [actionSheet showInView:[UIApplication sharedApplication].keyWindow];
+}
+
+#pragma - Private
+
+- (void)loadQueue:(NSInteger)number
+{
+    NSArray   *arrayNamesOfQueues = @[@"STATE A", @"STATE B", @"STATE C"];
+    NSInteger numberOfElements    = 0;
+
+    self.labelMainQueueTitle.text = [arrayNamesOfQueues objectAtIndex:number];
+
+    if (self.arrayElements && self.arrayElements.count > number) {
+        numberOfElements = [[self.arrayElements objectAtIndex:number] count];
+    }
+
+    if (numberOfElements == 0) {
+        switch (number) {
+        case 0:
+            [self requestElementsForState:@"A"];
+            break;
+        case 1:
+            [self requestElementsForState:@"B"];
+            break;
+        case 2:
+            [self requestElementsForState:@"C"];
+            break;
+        default:
+            break;
+        }
+    }
 }
 
 #pragma mark - Delegates
@@ -78,22 +142,33 @@
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    if (tableView.tag == 0) {
-        return 3;
+    NSInteger numberOfElements = 0;
+
+    if (self.arrayElements && self.arrayElements.count > tableView.tag) {
+        numberOfElements = [[self.arrayElements objectAtIndex:tableView.tag] count];
     }
-    return 0;
+
+    return numberOfElements;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    return 70;
+    return 60;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                                   reuseIdentifier:nil];
+    QueueCell     *cell   = [tableView dequeueReusableCellWithIdentifier:@"QueueCell"];
+    ElementObject *object = [[self.arrayElements objectAtIndex:tableView.tag] objectAtIndex:indexPath.row];
+    cell.elementName.text = object.elementName;
+
     return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    QueueCell *cell = (QueueCell *)[tableView cellForRowAtIndexPath:indexPath];
+    [cell setToSelectedState:YES];
 }
 
 #pragma mark UIScrollViewDelegate
@@ -104,6 +179,52 @@
     CGFloat   fractionalPage = self.scrollViewQueue.contentOffset.x / pageWidth;
     NSInteger page           = lround(fractionalPage);
     self.pageControlQueue.currentPage = page;
+}
+
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView
+{
+    CGFloat   pageWidth      = self.scrollViewQueue.frame.size.width;
+    CGFloat   fractionalPage = self.scrollViewQueue.contentOffset.x / pageWidth;
+    NSInteger page           = lround(fractionalPage);
+    self.pageControlQueue.currentPage = page;
+
+    [self loadQueue:page];
+}
+
+#pragma mark - Requests
+
+- (void)requestElementsForState:(NSString *)stateID
+{
+    AFHTTPRequestOperationManager *manager = [AFHTTPRequestOperationManager manager];
+    [manager GET:@"http://192.168.20.43:8080/service/getCurrentElementsForState"
+      parameters:@{@"State":stateID}
+         success:^(AFHTTPRequestOperation *operation, id responseObject) {
+         NSLog(@"JSON: %@", responseObject);
+         if ([stateID isEqualToString:@"A"]) {
+             [self reloadElementsAtIndex:0 withData:[responseObject objectForKey:@"elements"]];
+         } else if ([stateID isEqualToString:@"B"]) {
+             [self reloadElementsAtIndex:1 withData:[responseObject objectForKey:@"elements"]];
+         } else if ([stateID isEqualToString:@"C"]) {
+             [self reloadElementsAtIndex:2 withData:[responseObject objectForKey:@"elements"]];
+         }
+     }   failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+         NSLog(@"Error: %@", error);
+     }];
+}
+
+- (void)reloadElementsAtIndex:(NSInteger)position withData:(NSArray *)elements
+{
+    if (self.arrayElements && self.arrayElements.count > position) {
+        [[self.arrayElements objectAtIndex:position] removeAllObjects];
+    }
+
+    for (int i = 0; i < elements.count; i++) {
+        ElementObject *object = [[ElementObject alloc] initWithDataFrom:[elements objectAtIndex:i]];
+        [object setElementState:position];
+        [[self.arrayElements objectAtIndex:position] addObject:object];
+    }
+
+    [[self.arrayTableViewQueue objectAtIndex:position] reloadData];
 }
 
 @end

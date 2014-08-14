@@ -15,4 +15,9 @@
 @property (strong, nonatomic) UIPageControl       *pageControlQueue;
 @property (strong, nonatomic) UILabel             *labelMainQueueTitle;
 
+@property (strong, nonatomic) NSMutableArray *arrayElements;
+@property (strong, nonatomic) NSMutableArray *arrayStateA;
+@property (strong, nonatomic) NSMutableArray *arrayStateB;
+@property (strong, nonatomic) NSMutableArray *arrayStateC;
+
 @end
