@@ -10,8 +10,16 @@
 #import "AFNetworking.h"
 #import "ElementObject.h"
 #import "QueueCell.h"
+#import "CRToast.h"
 
-@interface ViewController ()
+static NSString *kChannelIdentifier_CrazyColors = @"crazycolors-channel";
+
+static NSString *kURLGetCurrentElementForState = @"http://192.168.21.61:8080/PubNubPoc/queueService/getCurrentElementForState/stateCode";
+static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/PubNubPoc/queueService/moveElementToState/elementCode/stateCode";
+
+@interface ViewController (){
+    PNChannel *channel;
+}
 
 @end
 
@@ -21,6 +29,10 @@
 {
     [super viewDidLoad];
     self.automaticallyAdjustsScrollViewInsets = NO;
+
+    [self setUpPubNub];
+    [self setUpNotifications];
+
     [self loadHeader];
     [self initializeScrollQueue];
     [self initializeQueues];
@@ -93,6 +105,33 @@
     }
 }
 
+- (void)setUpPubNub
+{
+    channel = [PNChannel channelWithName:kChannelIdentifier_CrazyColors
+                   shouldObservePresence:YES];
+    [PubNub subscribeOnChannel:channel];
+    [PubNub enablePresenceObservationForChannel:channel];
+}
+
+- (void)setUpNotifications
+{
+    [[PNObservationCenter defaultCenter] addMessageReceiveObserver:self
+                                                         withBlock:
+     ^(PNMessage *message)
+     {
+         NSDictionary *elementHasChangedContent = [message.message objectForKey:@"ElementHasChanged"];
+         if (elementHasChangedContent) {
+             NSString *elementMessage = [NSString stringWithFormat:@"ELEMENT %@ HAS CHANGED!",
+                                         [elementHasChangedContent objectForKey:@"elementId"]];
+             //NSInteger queueFrom = [[elementHasChangedContent objectForKey:@"previousStateId"] integerValue];
+             NSInteger queueTo = [[elementHasChangedContent objectForKey:@"newStateId"] integerValue];
+             
+             [self showNotificationWithMessage:elementMessage];
+             [self requestElementsForState:queueTo-1];
+         }
+     }];
+}
+
 #pragma Actions
 
 - (IBAction)performActionToCurrentSelection:(id)sender
@@ -101,57 +140,71 @@
 
     if (currentQueueNumber == 0) {
         actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
-                                                  delegate:nil
+                                                  delegate:self
                                          cancelButtonTitle:@"Cancel"
                                     destructiveButtonTitle:nil
                                          otherButtonTitles:@"Move To State B", @"Move To State C", nil];
     } else if (currentQueueNumber == 1) {
         actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
-                                                  delegate:nil
+                                                  delegate:self
                                          cancelButtonTitle:@"Cancel"
                                     destructiveButtonTitle:nil
                                          otherButtonTitles:@"Move To State A", @"Move To State C", nil];
     } else if (currentQueueNumber == 2) {
         actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
-                                                  delegate:nil
+                                                  delegate:self
                                          cancelButtonTitle:@"Cancel"
                                     destructiveButtonTitle:nil
                                          otherButtonTitles:@"Move To State A", @"Move To State B", nil];
     }
 
+    actionSheet.tag = currentQueueNumber;
     [actionSheet showInView:[UIApplication sharedApplication].keyWindow];
-    
-    NSLog(@"Current Selected Items : %@",self.arraySelectedElements);
+
+    NSLog(@"Current Selected Items : %@", self.arraySelectedElements);
 }
 
 #pragma - Private
+
+- (void)showNotificationWithMessage:(NSString *)message
+{
+    NSDictionary *options = @{
+        kCRToastTextKey : message,
+        kCRToastSubtitleTextKey : @"Updating...",
+        kCRToastNotificationTypeKey : @(CRToastTypeNavigationBar),
+        kCRToastTextAlignmentKey : @(NSTextAlignmentLeft),
+        kCRToastSubtitleTextAlignmentKey : @(NSTextAlignmentLeft),
+        kCRToastBackgroundColorKey : [UIColor colorWithRed:255.0/255.0
+                                                     green:64.0/255.0
+                                                      blue:64.0/255.0
+                                                     alpha:1.0],
+        kCRToastAnimationInTypeKey : @(CRToastAnimationTypeSpring),
+        kCRToastAnimationOutTypeKey : @(CRToastAnimationTypeSpring),
+        kCRToastAnimationInDirectionKey : @(CRToastAnimationDirectionTop),
+        kCRToastAnimationOutDirectionKey : @(CRToastAnimationDirectionBottom),
+        kCRToastImageKey : [UIImage imageNamed:@"alert_icon.png"],
+        kCRToastTimeIntervalKey : @(4.0)
+    };
+
+    [CRToastManager showNotificationWithOptions:options
+                                completionBlock:^{
+         NSLog(@"Completed");
+     }];
+}
 
 - (void)loadQueue:(NSInteger)number
 {
     NSArray   *arrayNamesOfQueues = @[@"STATE A", @"STATE B", @"STATE C"];
     NSInteger numberOfElements    = 0;
 
-    currentQueueNumber            = number;
-    self.labelMainQueueTitle.text = [arrayNamesOfQueues objectAtIndex:number];
+    self.labelMainQueueTitle.text = [arrayNamesOfQueues objectAtIndex:currentQueueNumber];
 
     if (self.arrayElements && self.arrayElements.count > number) {
         numberOfElements = [[self.arrayElements objectAtIndex:number] count];
     }
 
     if (numberOfElements == 0) {
-        switch (number) {
-        case 0:
-            [self requestElementsForState:@"A"];
-            break;
-        case 1:
-            [self requestElementsForState:@"B"];
-            break;
-        case 2:
-            [self requestElementsForState:@"C"];
-            break;
-        default:
-            break;
-        }
+        [self requestElementsForState:number];
     } else {
         [self cleanSelectionOfElementsOfSpace:number];
     }
@@ -231,28 +284,71 @@
     NSInteger page           = lround(fractionalPage);
 
     if (page != currentQueueNumber) {
+        currentQueueNumber                = page;
         self.pageControlQueue.currentPage = page;
         [self.arraySelectedElements removeAllObjects];
         [self loadQueue:page];
     }
 }
 
+#pragma mark UIActionSheetDelegate
+
+- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    NSInteger integerQueueTo = 0;
+    
+    if (currentQueueNumber == 0) {
+        integerQueueTo = (buttonIndex == 0) ? 2 : 3;
+    } else if (currentQueueNumber == 1) {
+        integerQueueTo = (buttonIndex == 0) ? 1 : 3;
+    } else if (currentQueueNumber == 2) {
+        integerQueueTo = (buttonIndex == 0) ? 1 : 2;
+    }
+    
+    if (integerQueueTo != 0) {
+        [self requestChangeOfElement:[[self.arraySelectedElements objectAtIndex:0] elementCode]
+                             toState:integerQueueTo];
+    }
+}
+
 #pragma mark - Requests
 
-- (void)requestElementsForState:(NSString *)stateID
+- (void)requestElementsForState:(NSInteger)stateID
 {
-    AFHTTPRequestOperationManager *manager = [AFHTTPRequestOperationManager manager];
-    [manager GET:@"http://192.168.20.43:8080/service/getCurrentElementsForState"
-      parameters:@{@"State":stateID}
+    AFHTTPRequestOperationManager *manager       = [AFHTTPRequestOperationManager manager];
+    NSString                      *stringStateID = [NSString stringWithFormat:@"%d", stateID+1];
+    NSString                      *stringURL     = [kURLGetCurrentElementForState stringByReplacingOccurrencesOfString:@"stateCode"
+                                                                                                            withString:stringStateID];
+    [manager GET:stringURL
+      parameters:nil
          success:^(AFHTTPRequestOperation *operation, id responseObject) {
          NSLog(@"JSON: %@", responseObject);
-         if ([stateID isEqualToString:@"A"]) {
-             [self reloadElementsAtIndex:0 withData:[responseObject objectForKey:@"elements"]];
-         } else if ([stateID isEqualToString:@"B"]) {
-             [self reloadElementsAtIndex:1 withData:[responseObject objectForKey:@"elements"]];
-         } else if ([stateID isEqualToString:@"C"]) {
-             [self reloadElementsAtIndex:2 withData:[responseObject objectForKey:@"elements"]];
-         }
+         [self reloadElementsAtIndex:stateID withData:[[responseObject objectForKey:@"State"] objectForKey:@"elements"]];
+     }   failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+         NSLog(@"Error: %@", error);
+     }];
+}
+
+- (void)requestChangeOfElement:(NSString *)elementID toState:(NSInteger)stateID
+{
+    AFHTTPRequestOperationManager *manager       = [AFHTTPRequestOperationManager manager];
+    NSString                      *stringStateID = [NSString stringWithFormat:@"%d", stateID];
+    NSString                      *stringURL;
+
+    stringURL = [kURLMoveElementToState stringByReplacingOccurrencesOfString:@"stateCode"
+                                                                  withString:stringStateID];
+    stringURL = [stringURL stringByReplacingOccurrencesOfString:@"elementCode"
+                                                                  withString:elementID];
+
+    [manager GET:stringURL
+      parameters:nil
+         success:^(AFHTTPRequestOperation *operation, id responseObject) {
+         NSLog(@"JSON: %@", responseObject);
+             
+             NSMutableArray *arrayCurrentElements = [self.arrayElements objectAtIndex:currentQueueNumber];
+             [arrayCurrentElements removeObject:[self.arraySelectedElements objectAtIndex:0]];
+             [[self.arrayTableViewQueue objectAtIndex:currentQueueNumber] reloadData];
+             
      }   failure:^(AFHTTPRequestOperation *operation, NSError *error) {
          NSLog(@"Error: %@", error);
      }];

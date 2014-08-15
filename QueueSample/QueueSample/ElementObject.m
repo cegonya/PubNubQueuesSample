@@ -15,8 +15,8 @@
     self = [super init];
 
     if (self) {
-        self.elementName = [data objectForKey:@"elementName"];
-        self.elementCode = [data objectForKey:@"elementCode"];
+        self.elementName = [NSString stringWithFormat:@"%@",[data objectForKey:@"name"]];
+        self.elementCode = [NSString stringWithFormat:@"%@",[data objectForKey:@"id"]];
     }
     return self;
 }

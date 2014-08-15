@@ -23,10 +23,8 @@
 
 - (void)loadInformationFromObject:(ElementObject *)object
 {
-    self.elementName.text = [self.elementName.text stringByReplacingOccurrencesOfString:@"COD"
-                                                                             withString:object.elementCode];
-    self.elementName.text = [self.elementName.text stringByReplacingOccurrencesOfString:@"NAME"
-                                                                             withString:object.elementName];
+    self.elementName.text = [NSString stringWithFormat:@"%@ - %@",object.elementCode,object.elementName];
+    [self setToSelectedState:false];
 }
 
 @end

@@ -8,15 +8,38 @@
 
 #import "AppDelegate.h"
 
+static NSString *kPubNubPublishKey   = @"pub-c-ae8c55a7-a336-4beb-a9fa-4db8dadd742e";
+static NSString *kPubNubSubscribeKey = @"sub-c-dd51faf4-b5dc-11e3-85fc-02ee2ddab7fe";
+static NSString *kPubNubSecretKey    = @"sec-c-MmQxYzg0YTYtYzg0MC00MzEzLThhMzgtZjBmNGQ4ZWI5NWJl";
+
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
     [[UIApplication sharedApplication] setStatusBarStyle:UIStatusBarStyleLightContent];
-    
+
+    //
+    NSString *UUID = [[NSUserDefaults standardUserDefaults] objectForKey:@"DeviceUUID"];
+
+    if (!UUID) {
+        UUID = [[NSUUID UUID] UUIDString];
+        [[NSUserDefaults standardUserDefaults] setObject:UUID forKey:@"DeviceUUID"];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    }
+
+    PNConfiguration *pubnubConfiguration = [PNConfiguration configurationForOrigin:@"pubsub.pubnub.com"
+                                                                        publishKey:kPubNubPublishKey
+                                                                      subscribeKey:kPubNubSubscribeKey
+                                                                         secretKey:kPubNubSecretKey];
+    [PubNub setDelegate:self];
+    [PubNub setClientIdentifier:UUID];
+    [pubnubConfiguration setPresenceHeartbeatInterval:2];
+    [PubNub setConfiguration:pubnubConfiguration];
+    [PubNub connect];
+
     return YES;
 }
-							
+
 - (void)applicationWillResignActive:(UIApplication *)application
 {
     // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
@@ -25,7 +48,7 @@
 
 - (void)applicationDidEnterBackground:(UIApplication *)application
 {
-    // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later. 
+    // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
     // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
 }
 
@@ -42,6 +65,12 @@
 - (void)applicationWillTerminate:(UIApplication *)application
 {
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+}
+
+#pragma mark PubNubDelegate
+
+- (void)pubnubClient:(PubNub *)client didReceiveMessage:(PNMessage *)message
+{
 }
 
 @end
