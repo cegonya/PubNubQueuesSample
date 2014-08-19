@@ -8,14 +8,11 @@
 
 #import "ViewController.h"
 #import "AFNetworking.h"
-#import "ElementObject.h"
-#import "QueueCell.h"
 #import "CRToast.h"
 
 static NSString *kChannelIdentifier_CrazyColors = @"crazycolors-channel";
-
-static NSString *kURLGetCurrentElementForState = @"http://192.168.21.61:8080/PubNubPoc/queueService/getCurrentElementForState/stateCode";
-static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/PubNubPoc/queueService/moveElementToState/elementCode/stateCode";
+static NSString *kURLGetCurrentElementForState  = @"http://192.168.21.61:8080/PubNubPoc/queueService/getCurrentElementForState/stateCode";
+static NSString *kURLMoveElementToState         = @"http://192.168.21.61:8080/PubNubPoc/queueService/moveElementToState/elementCode/stateCode";
 
 @interface ViewController (){
     PNChannel *channel;
@@ -28,16 +25,17 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
 - (void)viewDidLoad
 {
     [super viewDidLoad];
-    self.automaticallyAdjustsScrollViewInsets = NO;
 
     [self setUpPubNub];
     [self setUpNotifications];
 
+    self.automaticallyAdjustsScrollViewInsets = NO;
+    self.barButtonItemAction.enabled          = false;
     [self loadHeader];
     [self initializeScrollQueue];
     [self initializeQueues];
-    [self preloadCells];
 
+    [self preloadCells];
     [self loadQueue:0];
 }
 
@@ -93,8 +91,6 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
                           [[NSMutableArray alloc] init],
                           [[NSMutableArray alloc] init],
                           nil];
-
-    self.arraySelectedElements = [[NSMutableArray alloc] init];
 }
 
 - (void)preloadCells
@@ -123,11 +119,12 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
          if (elementHasChangedContent) {
              NSString *elementMessage = [NSString stringWithFormat:@"ELEMENT %@ HAS CHANGED!",
                                          [elementHasChangedContent objectForKey:@"elementId"]];
-             //NSInteger queueFrom = [[elementHasChangedContent objectForKey:@"previousStateId"] integerValue];
              NSInteger queueTo = [[elementHasChangedContent objectForKey:@"newStateId"] integerValue];
-             
+             NSInteger queueFrom = [[elementHasChangedContent objectForKey:@"previousStateId"] integerValue];
+
              [self showNotificationWithMessage:elementMessage];
              [self requestElementsForState:queueTo-1];
+             [self requestElementsForState:queueFrom-1];
          }
      }];
 }
@@ -137,6 +134,16 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
 - (IBAction)performActionToCurrentSelection:(id)sender
 {
     UIActionSheet *actionSheet;
+
+    if (!self.elementObjectSelected && !self.queueCellSelected) {
+        UIAlertView *warningMessage = [[UIAlertView alloc] initWithTitle:@"Warning"
+                                                                 message:@"Please perform a selection first"
+                                                                delegate:nil
+                                                       cancelButtonTitle:@"Ok"
+                                                       otherButtonTitles:nil];
+        [warningMessage show];
+        return;
+    }
 
     if (currentQueueNumber == 0) {
         actionSheet = [[UIActionSheet alloc] initWithTitle:@"Select an action"
@@ -160,8 +167,6 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
 
     actionSheet.tag = currentQueueNumber;
     [actionSheet showInView:[UIApplication sharedApplication].keyWindow];
-
-    NSLog(@"Current Selected Items : %@", self.arraySelectedElements);
 }
 
 #pragma - Private
@@ -183,7 +188,7 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
         kCRToastAnimationInDirectionKey : @(CRToastAnimationDirectionTop),
         kCRToastAnimationOutDirectionKey : @(CRToastAnimationDirectionBottom),
         kCRToastImageKey : [UIImage imageNamed:@"alert_icon.png"],
-        kCRToastTimeIntervalKey : @(4.0)
+        kCRToastTimeIntervalKey : @(2.5)
     };
 
     [CRToastManager showNotificationWithOptions:options
@@ -205,8 +210,6 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
 
     if (numberOfElements == 0) {
         [self requestElementsForState:number];
-    } else {
-        [self cleanSelectionOfElementsOfSpace:number];
     }
 }
 
@@ -262,8 +265,34 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
     QueueCell     *cell   = (QueueCell *)[tableView cellForRowAtIndexPath:indexPath];
     ElementObject *object = [[self.arrayElements objectAtIndex:tableView.tag] objectAtIndex:indexPath.row];
 
-    [cell setToSelectedState:!cell.isSelected];
-    [self.arraySelectedElements addObject:object];
+    [cell setSelected:FALSE];
+
+    if (self.queueCellSelected && cell == self.queueCellSelected) {
+        if (cell.isSelected) {
+            [cell setToSelectedState:FALSE];
+            self.queueCellSelected           = nil;
+            self.elementObjectSelected       = nil;
+            self.barButtonItemAction.enabled = FALSE;
+        } else {
+            [cell setToSelectedState:TRUE];
+            self.queueCellSelected           = cell;
+            self.elementObjectSelected       = object;
+            self.barButtonItemAction.enabled = TRUE;
+        }
+    } else {
+        if (self.queueCellSelected.isSelected) {
+            [self.queueCellSelected setToSelectedState:FALSE];
+            self.queueCellSelected     = nil;
+            self.elementObjectSelected = nil;
+        }
+
+        [cell setToSelectedState:TRUE];
+        self.queueCellSelected           = cell;
+        self.elementObjectSelected       = object;
+        self.barButtonItemAction.enabled = TRUE;
+    }
+
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
 }
 
 #pragma mark UIScrollViewDelegate
@@ -284,9 +313,13 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
     NSInteger page           = lround(fractionalPage);
 
     if (page != currentQueueNumber) {
+        if (self.queueCellSelected) {
+            [self.queueCellSelected setToSelectedState:FALSE];
+        }
         currentQueueNumber                = page;
         self.pageControlQueue.currentPage = page;
-        [self.arraySelectedElements removeAllObjects];
+        self.queueCellSelected            = nil;
+        self.elementObjectSelected        = nil;
         [self loadQueue:page];
     }
 }
@@ -295,8 +328,12 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
 
 - (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex
 {
+    if (buttonIndex == 2) {
+        return;
+    }
+
     NSInteger integerQueueTo = 0;
-    
+
     if (currentQueueNumber == 0) {
         integerQueueTo = (buttonIndex == 0) ? 2 : 3;
     } else if (currentQueueNumber == 1) {
@@ -304,10 +341,12 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
     } else if (currentQueueNumber == 2) {
         integerQueueTo = (buttonIndex == 0) ? 1 : 2;
     }
-    
+
     if (integerQueueTo != 0) {
-        [self requestChangeOfElement:[[self.arraySelectedElements objectAtIndex:0] elementCode]
+        [self requestChangeOfElement:[self.elementObjectSelected elementCode]
                              toState:integerQueueTo];
+        self.elementObjectSelected = nil;
+        self.queueCellSelected     = nil;
     }
 }
 
@@ -338,17 +377,15 @@ static NSString *kURLMoveElementToState        = @"http://192.168.21.61:8080/Pub
     stringURL = [kURLMoveElementToState stringByReplacingOccurrencesOfString:@"stateCode"
                                                                   withString:stringStateID];
     stringURL = [stringURL stringByReplacingOccurrencesOfString:@"elementCode"
-                                                                  withString:elementID];
+                                                     withString:elementID];
 
     [manager GET:stringURL
       parameters:nil
          success:^(AFHTTPRequestOperation *operation, id responseObject) {
          NSLog(@"JSON: %@", responseObject);
-             
-             NSMutableArray *arrayCurrentElements = [self.arrayElements objectAtIndex:currentQueueNumber];
-             [arrayCurrentElements removeObject:[self.arraySelectedElements objectAtIndex:0]];
-             [[self.arrayTableViewQueue objectAtIndex:currentQueueNumber] reloadData];
-             
+//         NSMutableArray *arrayCurrentElements = [self.arrayElements objectAtIndex:currentQueueNumber];
+//         [arrayCurrentElements removeObject:self.elementObjectSelected];
+//         [[self.arrayTableViewQueue objectAtIndex:currentQueueNumber] reloadData];
      }   failure:^(AFHTTPRequestOperation *operation, NSError *error) {
          NSLog(@"Error: %@", error);
      }];

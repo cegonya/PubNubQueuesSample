@@ -36,6 +36,7 @@
                         </barButtonItem>
                     </navigationItem>
                     <connections>
+                        <outlet property="barButtonItemAction" destination="Kbn-5K-CZY" id="rhA-An-ZR2"/>
                         <outlet property="scrollViewQueue" destination="h7b-SO-Vev" id="D2O-WU-0pS"/>
                     </connections>
                 </viewController>
